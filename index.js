@@ -46,7 +46,10 @@ app.post('/create-bot', async (req, res) => {
       store: store,
       backupSyncIntervalMs: 300000
     }),
-    puppeteer: { args: ['--no-sandbox', '--disable-setuid-sandbox'] }
+    puppeteer: {
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--single-process', '--no-zygote']
+    }
   });
 
   client.on('qr', async (qr) => {
@@ -63,6 +66,14 @@ app.post('/create-bot', async (req, res) => {
 
   client.on('remote_session_saved', () => {
     console.log("Login Save Hoye Geche!", clientNumber);
+  });
+
+  client.on('auth_failure', (msg) => {
+    console.log("Auth Failure:", msg);
+  });
+
+  client.on('disconnected', (reason) => {
+    console.log("Disconnected:", reason);
   });
 
   client.on('message', async msg => {
