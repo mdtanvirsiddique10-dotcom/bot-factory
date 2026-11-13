@@ -1,101 +1,63 @@
 const express = require('express');
-const { Client, RemoteAuth } = require('whatsapp-web.js');
-const { MongoStore } = require('wwebjs-mongo');
-const mongoose = require('mongoose');
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode');
-
+const qrcodeTerminal = require('qrcode-terminal');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
+const puppeteer = require('puppeteer');
 const app = express();
-app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-
+app.use(express.json());
+const PORT = process.env.PORT || 3000;
+const GEMINI_KEY = process.env.GEMINI_API_KEY;
+const genAI = GEMINI_KEY ? new GoogleGenerativeAI(GEMINI_KEY) : null;
 let allBots = {};
-let mongoConnected = false;
-
-async function connectMongo() {
-  if (mongoConnected) return;
-  try {
-    await mongoose.connect(process.env.MONGO_URI);
-    mongoConnected = true;
-    console.log("MongoDB Connected - Login Mone Thakbe!");
-  } catch (e) {
-    console.log("Mongo Error:", e.message);
-  }
-}
-
 app.get('/', (req, res) => {
-  res.send(`<h2>🤖 Bot Factory - Login Mone Thakbe!</h2>
-  <form action="/create-bot" method="POST">
-  ক্লায়েন্টের নম্বর (8801...): <input name="clientNumber" required><br><br>
-  ব্যবসার নাম: <input name="businessName" required><br><br>
-  ব্যবসার তথ্য: <textarea name="businessInfo"></textarea><br><br>
-  <button type="submit">বট বানাও</button></form>`);
+  res.send(`<html><head><meta name="viewport" content="width=device-width, initial-scale=1"><title>Bot Factory</title><style>body{font-family:sans-serif;max-width:500px;margin:20px auto;padding:20px}input,textarea{width:100%;padding:12px;margin:8px 0;border:1px solid #ccc;border-radius:8px}button{width:100%;padding:14px;background:#25D366;border:none;color:white;font-size:18px;border-radius:8px}</style></head><body><h2>Bot Factory - Login Mone Thakbe!</h2><form action="/create-bot" method="POST"><label>ক্লায়েন্টের নম্বর (8801...):</label><input name="number" placeholder="8801712345678" required><label>ব্যবসার নাম:</label><input name="shopName" placeholder="Tanvir Fashion" required><label>ব্যবসার তথ্য:</label><textarea name="shopInfo" rows="4" placeholder="কি বিক্রি করো, দাম কত" required></textarea><button>বট বানাও</button></form></body></html>`);
 });
-
 app.post('/create-bot', async (req, res) => {
-  const { clientNumber, businessName, businessInfo } = req.body;
-  await connectMongo();
-  const store = new MongoStore({ mongoose: mongoose });
-
+  const { number, shopName, shopInfo } = req.body;
+  const clientNumber = number.replace(/[^0-9]/g, '');
+  if (allBots[clientNumber]) return res.redirect(`/qr/${clientNumber}`);
+  allBots[clientNumber] = { qrImage: null, status: "বট চালু হচ্ছে... ৩০ সেকেন্ড অপেক্ষা করো" };
+  const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || await puppeteer.executablePath();
   const client = new Client({
-    authStrategy: new RemoteAuth({
-      clientId: clientNumber,
-      store: store,
-      backupSyncIntervalMs: 300000
-    }),
-    puppeteer: {
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--single-process', '--no-zygote']
-    }
+    authStrategy: new LocalAuth({ clientId: clientNumber }),
+    puppeteer: { headless: true, executablePath: executablePath, args: ['--no-sandbox','--disable-setuid-sandbox','--disable-dev-shm-usage','--disable-accelerated-2d-canvas','--no-first-run','--no-zygote','--single-process','--disable-gpu'] }
   });
-
   client.on('qr', async (qr) => {
-    const qrImage = await qrcode.toDataURL(qr);
-    allBots[clientNumber] = { qrImage, status: "QR আসছে - স্ক্যান করো" };
     console.log("QR for", clientNumber);
+    qrcodeTerminal.generate(qr, { small: true });
+    console.log("QR LOG E ASCHE - SCAN KORO!");
+    const qrImage = await qrcode.toDataURL(qr);
+    allBots[clientNumber].qrImage = qrImage;
+    allBots[clientNumber].status = "QR আসছে - স্ক্যান করো";
   });
-
   client.on('ready', () => {
-    if (!allBots[clientNumber]) allBots[clientNumber] = {};
-    allBots[clientNumber].status = "✅ চালু! আর QR লাগবে না";
     console.log("Bot Ready:", clientNumber);
+    allBots[clientNumber].status = "✅ চালু! বট এখন কাজ করছে";
+    allBots[clientNumber].qrImage = null;
   });
-
-  client.on('remote_session_saved', () => {
-    console.log("Login Save Hoye Geche!", clientNumber);
-  });
-
-  client.on('auth_failure', (msg) => {
-    console.log("Auth Failure:", msg);
-  });
-
-  client.on('disconnected', (reason) => {
-    console.log("Disconnected:", reason);
-  });
-
-  client.on('message', async msg => {
-    if (msg.from === 'status@broadcast') return;
+  client.on('auth_failure', (msg) => { allBots[clientNumber].status = "Login Fail - আবার চেষ্টা করো"; });
+  client.on('disconnected', (reason) => { allBots[clientNumber].status = "বন্ধ হয়ে গেছে - আবার বানাও"; });
+  client.on('message', async (msg) => {
+    if (msg.fromMe) return;
     try {
-      const prompt = `তুমি ${businessName} এর সেলসম্যান। তথ্য: ${businessInfo}। বাংলায় বন্ধুর মতো জবাব দাও, বলবা না তুমি AI। কাস্টমার: "${msg.body}"`;
-      const result = await model.generateContent(prompt);
-      msg.reply(result.response.text());
-    } catch (e) {
-      console.log("AI Error", e.message);
-    }
+      let replyText = `আসসালামু আলাইকুম! ${shopName} এ স্বাগতম। ${shopInfo}`;
+      if (genAI) {
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        const prompt = `তুমি ${shopName} এর কর্মচারী। তথ্য: ${shopInfo}. কাস্টমার: ${msg.body}. বাংলায় ছোট উত্তর দাও।`;
+        const result = await model.generateContent(prompt);
+        replyText = result.response.text();
+      }
+      await msg.reply(replyText);
+    } catch (e) { console.log("AI Error", e.message); }
   });
-
-  client.initialize();
-  res.send(`<h2>বট বানানো শুরু!</h2><p>১বার QR স্ক্যান করলেই সারাজীবন চলবে।</p><a href="/get-qr/${clientNumber}">QR দেখতে ক্লিক করো</a>`);
+  client.initialize().catch(e => { allBots[clientNumber].status = "Error: " + e.message; });
+  res.redirect(`/qr/${clientNumber}`);
 });
-
-app.get('/get-qr/:number', (req, res) => {
+app.get('/qr/:number', (req, res) => {
   const bot = allBots[req.params.number];
-  if (!bot) return res.send("এখনো QR আসে নাই, ১০ সেকেন্ড পর রিফ্রেশ দাও। যদি বট আগে চালু থাকে, তাহলে QR লাগবে না, বট এমনিতেই চালু আছে।");
-  res.send(`<h2>${bot.status}</h2><img src="${bot.qrImage}" />`);
+  if (!bot) return res.send("বট পাওয়া যায়নি। <a href='/'>আবার বানাও</a>");
+  res.send(`<html><head><meta http-equiv="refresh" content="5"><meta name="viewport" content="width=device-width, initial-scale=1"><title>QR Scan</title><style>body{font-family:sans-serif;text-align:center;padding:20px}img{max-width:300px}</style></head><body><h2>${bot.status}</h2>${bot.qrImage ? `<img src="${bot.qrImage}"><p>WhatsApp > Linked Devices > Link a device দিয়ে স্ক্যান করো</p>` : `<p>অপেক্ষা করো... পেজটি ৫ সেকেন্ড পর পর Refresh হবে।</p><p>QR Render Logs এও দেখতে পারবা।</p>`}<br><a href="/">আরেকটা বট বানাও</a></body></html>`);
 });
-
-const PORT = process.env.PORT || 8000;
-app.listen(PORT, () => console.log("Bot Factory চালু!"));
+app.listen(PORT, () => console.log("Bot Factory চালু! Port " + PORT));
