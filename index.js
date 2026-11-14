@@ -67,7 +67,7 @@ app.post('/create-bot', async (req, res) => {
   client.on('auth_failure', (msg) => { allBots[clientNumber].status = "Login Fail - আবার চেষ্টা করো"; });
   client.on('disconnected', (reason) => { allBots[clientNumber].status = "বন্ধ হয়ে গেছে - আবার বানাও"; });
   client.on('message', async (msg) => {
-    if (msg.fromMe) return;
+    //if (msg.fromMe) return;
     try {
       let replyText = `আসসালামু আলাইকুম! ${shopName} এ স্বাগতম। ${shopInfo}`;
       if (genAI) {
