@@ -3,12 +3,39 @@ const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode');
 const qrcodeTerminal = require('qrcode-terminal');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const fs = require('fs');
+const path = require('path');
 const app = express();
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 const PORT = process.env.PORT || 3000;
 const GEMINI_KEY = process.env.GEMINI_API_KEY;
 const genAI = GEMINI_KEY ? new GoogleGenerativeAI(GEMINI_KEY) : null;
+
+function findChrome() {
+  try {
+    const base = '/opt/render/.cache/puppeteer/chrome';
+    if (!fs.existsSync(base)) return undefined;
+    const versions = fs.readdirSync(base);
+    for (const v of versions) {
+      const p1 = path.join(base, v, 'chrome-linux64', 'chrome');
+      const p2 = path.join(base, v, 'chrome-linux', 'chrome');
+      if (fs.existsSync(p1)) return p1;
+      if (fs.existsSync(p2)) return p2;
+    }
+    // headless shell fallback
+    const base2 = '/opt/render/.cache/puppeteer/chrome-headless-shell';
+    if (fs.existsSync(base2)) {
+      const versions2 = fs.readdirSync(base2);
+      for (const v of versions2) {
+        const p3 = path.join(base2, v, 'chrome-headless-shell-linux64', 'chrome-headless-shell');
+        if (fs.existsSync(p3)) return p3;
+      }
+    }
+  } catch(e) { console.log("Chrome find error", e.message); }
+  return undefined;
+}
+
 let allBots = {};
 app.get('/', (req, res) => {
   res.send(`<html><head><meta name="viewport" content="width=device-width, initial-scale=1"><title>Bot Factory</title><style>body{font-family:sans-serif;max-width:500px;margin:20px auto;padding:20px}input,textarea{width:100%;padding:12px;margin:8px 0;border:1px solid #ccc;border-radius:8px}button{width:100%;padding:14px;background:#25D366;border:none;color:white;font-size:18px;border-radius:8px}</style></head><body><h2>Bot Factory - Login Mone Thakbe!</h2><form action="/create-bot" method="POST"><label>ক্লায়েন্টের নম্বর (8801...):</label><input name="number" placeholder="8801712345678" required><label>ব্যবসার নাম:</label><input name="shopName" placeholder="Tanvir Fashion" required><label>ব্যবসার তথ্য:</label><textarea name="shopInfo" rows="4" placeholder="কি বিক্রি করো, দাম কত" required></textarea><button>বট বানাও</button></form></body></html>`);
@@ -18,9 +45,11 @@ app.post('/create-bot', async (req, res) => {
   const clientNumber = number.replace(/[^0-9]/g, '');
   if (allBots[clientNumber]) return res.redirect(`/qr/${clientNumber}`);
   allBots[clientNumber] = { qrImage: null, status: "বট চালু হচ্ছে... ৩০ সেকেন্ড অপেক্ষা করো" };
+  const chromePath = findChrome();
+  console.log("Chrome Path:", chromePath);
   const client = new Client({
     authStrategy: new LocalAuth({ clientId: clientNumber }),
-    puppeteer: { headless: true, args: ['--no-sandbox','--disable-setuid-sandbox','--disable-dev-shm-usage','--disable-gpu','--single-process','--no-zygote'] }
+    puppeteer: { headless: true, executablePath: chromePath, args: ['--no-sandbox','--disable-setuid-sandbox','--disable-dev-shm-usage','--disable-gpu','--single-process','--no-zygote'] }
   });
   client.on('qr', async (qr) => {
     console.log("QR for", clientNumber);
@@ -50,7 +79,7 @@ app.post('/create-bot', async (req, res) => {
       await msg.reply(replyText);
     } catch (e) { console.log("AI Error", e.message); }
   });
-  client.initialize().catch(e => { allBots[clientNumber].status = "Error: " + e.message; });
+  client.initialize().catch(e => { allBots[clientNumber].status = "Error: " + e.message; console.log("Init Error:", e.message); });
   res.redirect(`/qr/${clientNumber}`);
 });
 app.get('/qr/:number', (req, res) => {
