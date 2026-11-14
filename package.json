@@ -1,19 +1,12 @@
 {
-  "name": "bot-factory",
+  "name": "bot-factory-baileys",
   "version": "1.0.0",
   "main": "index.js",
-  "scripts": {
-    "start": "node index.js",
-    "postinstall": "npx puppeteer browsers install chrome@146.0.7680.31"
-  },
+  "scripts": { "start": "node index.js" },
   "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.0",
     "express": "^4.18.2",
-    "whatsapp-web.js": "^1.26.0",
-    "@google/generative-ai": "^0.1.0",
     "qrcode": "^1.5.3",
-    "qrcode-terminal": "^0.12.0",
-    "puppeteer": "^24.0.0",
-    "mongoose": "^7.5.0",
-    "wwebjs-mongo": "^1.1.0"
+    "pino": "^1.4.0"
   }
 }
