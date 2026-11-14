@@ -40,19 +40,36 @@ async function startBot() {
     }
   });
 
-  // অটো রিপ্লাই
   sock.ev.on('messages.upsert', async ({ messages }) => {
     const m = messages[0];
     if (!m.message) return;
     const text = m.message.conversation || m.message.extendedTextMessage?.text || '';
     if (!text) return;
-    if (text.startsWith('Hello!') || text.startsWith('মেসেজ পাইছি')) return;
+    if (text.startsWith('Hello!') || text.startsWith('মেসেজ পাইছি') || text.startsWith('🤖')) return;
     const jid = m.key.remoteJid;
-    if (text.toLowerCase() === 'hi' || text.toLowerCase() === 'hello') {
-      await sock.sendMessage(jid, { text: 'Hello! আমি Bot Factory বট, কেমন আছো? 😊' });
+    const low = text.toLowerCase().trim();
+
+    let reply = '';
+
+    if (low === 'hi' || low === 'hello' || low === 'hey' || low === 'হাই') {
+      reply = 'Hello! আমি Bot Factory বট, কেমন আছো? 😊\n\nমেনু দেখতে *menu* লিখো';
+    } else if (low === 'menu' || low === 'মেনু') {
+      reply = '🤖 *Bot Factory মেনু*\n\n1. *hi* - হ্যালো\n2. *dam* - দাম জানতে\n3. *client* - ক্লায়েন্টের জন্য বট\n4. *order* - অর্ডার করতে\n5. *help* - সাহায্য';
+    } else if (low.includes('dam') || low.includes('দাম') || low.includes('price')) {
+      reply = '💰 *দাম লিস্ট:*\n\n✅ সাধারণ অটো রিপ্লাই বট - 500 টাকা\n✅ মেনু + অর্ডার বট - 1500 টাকা\n✅ ফুল বিজনেস বট - 3000 টাকা\n\nঅর্ডার করতে *order* লিখো';
+    } else if (low.includes('client') || low.includes('ক্লাইন্ট')) {
+      reply = '👨‍💼 ক্লায়েন্টের জন্য বট লাগবে?\n\nআমরা দোকান, রেস্টুরেন্ট, কোচিং এর জন্য বট বানাই দিই।\nদাম জানতে *dam* লিখো';
+    } else if (low.includes('order') || low.includes('অর্ডার')) {
+      reply = '✅ অর্ডার নেওয়া হয়েছে!\nআপনার নাম আর ঠিকানা পাঠান, আমরা যোগাযোগ করবো।';
+    } else if (low.includes('ki kor') || low.includes('কি কর') || low.includes('কেমন আছ')) {
+      reply = 'আমি ভালো আছি! 😊 তুমি কেমন আছো?\nমেনু দেখতে *menu* লিখো';
+    } else if (low === 'help') {
+      reply = 'সাহায্য লাগলে *menu* লিখো, সব অপশন দেখতে পারবা।';
     } else {
-      await sock.sendMessage(jid, { text: 'মেসেজ পাইছি: ' + text });
+      reply = '🤖 বুঝতে পারি নাই।\nমেনু দেখতে *menu* লিখো';
     }
+
+    await sock.sendMessage(jid, { text: reply });
   });
 }
 
