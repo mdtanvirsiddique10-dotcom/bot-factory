@@ -61,6 +61,7 @@ async function startBot() {
   sock.ev.on('messages.upsert', async ({ messages }) => {
     const m = messages[0];
     if (!m.message) return;
+        if (m.key.fromMe) return;
     const text = m.message.conversation || m.message.extendedTextMessage?.text || '';
     if (!text) return;
     if (text.startsWith('Hello!') || text.startsWith('মেসেজ পাইছি') || text.startsWith('🤖')) return;
