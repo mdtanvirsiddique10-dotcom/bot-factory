@@ -7,6 +7,24 @@ const fs = require('fs');
 const app = express();
 let qrCode = '';
 let status = 'QR আসতেছে...';
+const GEMINI_KEY = process.env.GEMINI_API_KEY;
+
+async function askGemini(prompt) {
+  try {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: `তুমি Bot Factory এর স্মার্ট বাংলা WhatsApp বট। ছোট করে, বন্ধুর মতো বাংলায় উত্তর দাও। প্রশ্ন: ${prompt}` }] }]
+      })
+    });
+    const data = await res.json();
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || 'দুঃখিত, একটু সমস্যা হইছে। আবার বলো।';
+  } catch (e) {
+    console.log('Gemini Error:', e.message);
+    return 'Gemini তে সমস্যা হইছে। একটু পর আবার চেষ্টা করো।';
+  }
+}
 
 async function startBot() {
   const { state, saveCreds } = await useMultiFileAuthState('./auth');
@@ -26,7 +44,7 @@ async function startBot() {
       status = 'QR রেডি - স্ক্যান করো';
     }
     if (connection === 'open') {
-      status = '✅ লিংক হয়ে গেছে!';
+      status = '✅ লিংক হয়ে গেছে! Gemini Active';
       qrCode = '';
     }
     if (connection === 'close') {
@@ -51,22 +69,15 @@ async function startBot() {
 
     let reply = '';
 
-    if (low === 'hi' || low === 'hello' || low === 'hey' || low === 'হাই') {
-      reply = 'Hello! আমি Bot Factory বট, কেমন আছো? 😊\n\nমেনু দেখতে *menu* লিখো';
+    if (low === 'hi' || low === 'hello' || low === 'হাই') {
+      reply = 'Hello! আমি Bot Factory বট 😊\nমেনু দেখতে *menu* লিখো, আর যেকোনো প্রশ্ন করতে পারো!';
     } else if (low === 'menu' || low === 'মেনু') {
-      reply = '🤖 *Bot Factory মেনু*\n\n1. *hi* - হ্যালো\n2. *dam* - দাম জানতে\n3. *client* - ক্লায়েন্টের জন্য বট\n4. *order* - অর্ডার করতে\n5. *help* - সাহায্য';
-    } else if (low.includes('dam') || low.includes('দাম') || low.includes('price')) {
-      reply = '💰 *দাম লিস্ট:*\n\n✅ সাধারণ অটো রিপ্লাই বট - 500 টাকা\n✅ মেনু + অর্ডার বট - 1500 টাকা\n✅ ফুল বিজনেস বট - 3000 টাকা\n\nঅর্ডার করতে *order* লিখো';
-    } else if (low.includes('client') || low.includes('ক্লাইন্ট')) {
-      reply = '👨‍💼 ক্লায়েন্টের জন্য বট লাগবে?\n\nআমরা দোকান, রেস্টুরেন্ট, কোচিং এর জন্য বট বানাই দিই।\nদাম জানতে *dam* লিখো';
-    } else if (low.includes('order') || low.includes('অর্ডার')) {
-      reply = '✅ অর্ডার নেওয়া হয়েছে!\nআপনার নাম আর ঠিকানা পাঠান, আমরা যোগাযোগ করবো।';
-    } else if (low.includes('ki kor') || low.includes('কি কর') || low.includes('কেমন আছ')) {
-      reply = 'আমি ভালো আছি! 😊 তুমি কেমন আছো?\nমেনু দেখতে *menu* লিখো';
-    } else if (low === 'help') {
-      reply = 'সাহায্য লাগলে *menu* লিখো, সব অপশন দেখতে পারবা।';
+      reply = '🤖 *Bot Factory মেনু*\n\n1. *hi* - হ্যালো\n2. *dam* - দাম জানতে\n3. যেকোনো প্রশ্ন করো - Gemini উত্তর দিবে';
+    } else if (low.includes('dam') || low.includes('দাম')) {
+      reply = '💰 *দাম:*\n✅ সাধারণ বট - 500 টাকা\n✅ মেনু + অর্ডার বট - 1500 টাকা\n✅ ফুল বিজনেস বট - 3000 টাকা';
     } else {
-      reply = '🤖 বুঝতে পারি নাই।\nমেনু দেখতে *menu* লিখো';
+      // বাকি সব Gemini কে দাও
+      reply = await askGemini(text);
     }
 
     await sock.sendMessage(jid, { text: reply });
@@ -76,7 +87,7 @@ async function startBot() {
 startBot();
 
 app.get('/', (req, res) => {
-  res.send(`<h1>Bot Factory - Baileys (হালকা)</h1><h2>${status}</h2>${qrCode ? `<img src="${qrCode}" width="300">` : ''}<p>পেজটি ৫ সেকেন্ড পর পর Refresh হবে</p><script>setTimeout(()=>location.reload(),5000)</script>`);
+  res.send(`<h1>Bot Factory - Gemini Bot</h1><h2>${status}</h2><p>Gemini Key: ${GEMINI_KEY ? '✅ আছে' : '❌ নাই'}</p>${qrCode ? `<img src="${qrCode}" width="300">` : ''}<script>setTimeout(()=>location.reload(),5000)</script>`);
 });
 
-app.listen(10000, () => console.log('Baileys Bot চালু! Port 10000'));
+app.listen(10000, () => console.log('Gemini Bot চালু! Port 10000'));
