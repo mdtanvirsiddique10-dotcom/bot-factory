@@ -3,7 +3,6 @@ const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode');
 const qrcodeTerminal = require('qrcode-terminal');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
-const puppeteer = require('puppeteer');
 const app = express();
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
@@ -19,10 +18,9 @@ app.post('/create-bot', async (req, res) => {
   const clientNumber = number.replace(/[^0-9]/g, '');
   if (allBots[clientNumber]) return res.redirect(`/qr/${clientNumber}`);
   allBots[clientNumber] = { qrImage: null, status: "বট চালু হচ্ছে... ৩০ সেকেন্ড অপেক্ষা করো" };
-  const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || await puppeteer.executablePath();
   const client = new Client({
     authStrategy: new LocalAuth({ clientId: clientNumber }),
-    puppeteer: { headless: true, executablePath: executablePath, args: ['--no-sandbox','--disable-setuid-sandbox','--disable-dev-shm-usage','--disable-accelerated-2d-canvas','--no-first-run','--no-zygote','--single-process','--disable-gpu'] }
+    puppeteer: { headless: true, args: ['--no-sandbox','--disable-setuid-sandbox','--disable-dev-shm-usage','--disable-gpu','--single-process','--no-zygote'] }
   });
   client.on('qr', async (qr) => {
     console.log("QR for", clientNumber);
